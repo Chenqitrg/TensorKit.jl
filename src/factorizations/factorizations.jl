@@ -64,6 +64,9 @@ function _blockmap(f; kwargs...)
     end
 end
 
+# Fast-path: HermitianTensorMap is Hermitian by definition
+MAK.ishermitian(::HermitianTensorMap; kwargs...) = true
+
 function MAK.ishermitian(t::AbstractTensorMap; kwargs...)
     return InnerProductStyle(t) === EuclideanInnerProduct() &&
         domain(t) == codomain(t) &&

@@ -28,7 +28,7 @@ export CompositeSpace, ProductSpace # composite spaces
 export FusionTree
 export IndexSpace, HomSpace, TensorSpace, TensorMapSpace
 export AbstractTensorMap, AbstractTensor, TensorMap, Tensor # tensors and tensor properties
-export DiagonalTensorMap, BraidingTensor
+export DiagonalTensorMap, HermitianTensorMap, BraidingTensor
 export SpaceMismatch, SectorMismatch, IndexError # error types
 
 # Export general vector space methods
@@ -264,6 +264,7 @@ include("tensors/tensoroperations.jl")
 include("tensors/treetransformers.jl")
 include("tensors/indexmanipulations.jl")
 include("tensors/diagonal.jl")
+include("tensors/hermitian.jl")
 include("tensors/braidingtensor.jl")
 
 include("factorizations/factorizations.jl")
