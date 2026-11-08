@@ -388,16 +388,18 @@ end
 # TODO: consider spawning threads for different blocks, support backends
 
 # TensorMap inverse
-function Base.inv(t::AbstractTensorMap)
+function Base.inv(t::AbstractTensorMap; ishermitian::Bool = false, isposdef::Bool = false)
     cod = codomain(t)
     dom = domain(t)
     cod ≅ dom ||
         throw(SpaceMismatch("codomain $cod and domain $dom are not isomorphic: no inverse"))
+    (ishermitian || isposdef) && LinearAlgebra.checksquare(t)
     T = float(scalartype(t))
     tinv = similar(t, T, dom ← cod)
     for (c, b) in blocks(t)
         binv = one!(block(tinv, c))
-        ldiv!(lu(b), binv)
+        F = (ishermitian || isposdef) ? _structured_solve_factor(float(b), ishermitian, isposdef) : lu(b)
+        ldiv!(F, binv)
     end
     return tinv
 end
@@ -410,26 +412,51 @@ function LinearAlgebra.pinv(t::AbstractTensorMap; kwargs...)
     end
     return tpinv
 end
-function Base.:(\)(t1::AbstractTensorMap, t2::AbstractTensorMap)
+function Base.:(\)(
+        t1::AbstractTensorMap, t2::AbstractTensorMap;
+        ishermitian::Bool = false, isposdef::Bool = false
+    )
     codomain(t1) == codomain(t2) ||
         throw(SpaceMismatch("non-matching codomains in t1 \\ t2"))
+    (ishermitian || isposdef) && LinearAlgebra.checksquare(t1)
 
     T = float(promote_type(scalartype(t1), scalartype(t2)))
     t = similar(t1, T, domain(t1) ← domain(t2))
     for (c, b) in blocks(t)
-        copy!(b, block(t1, c) \ block(t2, c))
+        F = _structured_solve_factor(block(t1, c), ishermitian, isposdef)
+        copy!(b, F \ block(t2, c))
     end
     return t
 end
-function Base.:(/)(t1::AbstractTensorMap, t2::AbstractTensorMap)
+function Base.:(/)(
+        t1::AbstractTensorMap, t2::AbstractTensorMap;
+        ishermitian::Bool = false, isposdef::Bool = false
+    )
     domain(t1) == domain(t2) ||
         throw(SpaceMismatch("non-matching domains in t1 / t2"))
+    (ishermitian || isposdef) && LinearAlgebra.checksquare(t2)
     T = float(promote_type(scalartype(t1), scalartype(t2)))
     t = similar(t1, T, codomain(t1) ← codomain(t2))
     for (c, b) in blocks(t)
-        copy!(b, block(t1, c) / block(t2, c))
+        F = _structured_solve_factor(block(t2, c), ishermitian, isposdef)
+        # BunchKaufman does not implement matrix right division. For a
+        # Hermitian coefficient, X * A = B is equivalent to A * X' = B'.
+        if ishermitian || isposdef
+            copy!(b, (F \ block(t1, c)')')
+        else
+            copy!(b, block(t1, c) / F)
+        end
     end
     return t
+end
+
+# Structure is asserted by the caller: Hermitian uses the upper triangle, while
+# Cholesky additionally checks positive definiteness. Preserve the general matrix
+# division path (including rectangular least squares) when no structure is given.
+function _structured_solve_factor(b::AbstractMatrix, ishermitian::Bool, isposdef::Bool)
+    isposdef && return LinearAlgebra.cholesky(Hermitian(b))
+    ishermitian && return LinearAlgebra.bunchkaufman(Hermitian(b))
+    return b
 end
 
 @deprecate exp!(t) exponential!(t)

@@ -354,14 +354,36 @@ function LinearAlgebra.rmul!(t::AbstractTensorMap, D::DiagonalTensorMap)
     return t
 end
 
-Base.inv(d::DiagonalTensorMap) = DiagonalTensorMap(inv.(d.data), d.domain)
-function Base.:\(d1::DiagonalTensorMap, d2::DiagonalTensorMap)
-    d1.domain == d2.domain || throw(SpaceMismatch())
-    return DiagonalTensorMap(d1.data .\ d2.data, d1.domain)
+function Base.inv(d::DiagonalTensorMap; ishermitian::Bool = false, isposdef::Bool = false)
+    data = _structured_solve_diagonal(d, ishermitian, isposdef)
+    return DiagonalTensorMap(inv.(data), d.domain)
 end
-function Base.:/(d1::DiagonalTensorMap, d2::DiagonalTensorMap)
+function Base.:\(
+        d1::DiagonalTensorMap, d2::DiagonalTensorMap;
+        ishermitian::Bool = false, isposdef::Bool = false
+    )
     d1.domain == d2.domain || throw(SpaceMismatch())
-    return DiagonalTensorMap(d1.data ./ d2.data, d1.domain)
+    data = _structured_solve_diagonal(d1, ishermitian, isposdef)
+    return DiagonalTensorMap(data .\ d2.data, d1.domain)
+end
+function Base.:/(
+        d1::DiagonalTensorMap, d2::DiagonalTensorMap;
+        ishermitian::Bool = false, isposdef::Bool = false
+    )
+    d1.domain == d2.domain || throw(SpaceMismatch())
+    data = _structured_solve_diagonal(d2, ishermitian, isposdef)
+    return DiagonalTensorMap(d1.data ./ data, d1.domain)
+end
+
+function _structured_solve_diagonal(d::DiagonalTensorMap, ishermitian::Bool, isposdef::Bool)
+    (ishermitian || isposdef) || return d.data
+    # Match Hermitian's real diagonal without changing the storage scalar type.
+    data = map(x -> oftype(x, real(x)), d.data)
+    if isposdef
+        i = findfirst(x -> !(real(x) > 0), data)
+        isnothing(i) || throw(LinearAlgebra.PosDefException(i))
+    end
+    return data
 end
 function LinearAlgebra.pinv(d::DiagonalTensorMap; kwargs...)
     T = eltype(d.data)
