@@ -18,6 +18,30 @@ If the inverse is composed with another tensor `t2`, we can use the syntax `t1 \
 However, this syntax also accepts instances `t1` whose domain and codomain are not isomorphic, and then amounts to `pinv(t1)`, the Moore-Penrose pseudoinverse.
 This, however, is only really justified as minimizing the least squares problem if `InnerProductStyle(t) <: EuclideanProduct`.
 
+When the coefficient tensor is known to be Hermitian, the keyword `ishermitian = true`
+selects a blockwise Hermitian solve (Bunch–Kaufman factorization for dense blocks).
+For a Hermitian positive-definite tensor, `isposdef = true` selects Cholesky factorization
+and implies `ishermitian = true`.
+These keywords are supported by `inv`, `\`, and `/`; use function-call syntax to pass
+keywords to the division operators:
+
+```julia
+X = (\)(A, B; ishermitian = true) # solve A * X = B
+Y = (/)(B, A; isposdef = true)    # solve Y * A = B
+Ainv = inv(A; isposdef = true)
+```
+
+The structure keywords describe `A` (the left operand of `\`, or the right operand of `/`).
+They require equal domain and codomain, and interpret each block using its upper triangle,
+as in `LinearAlgebra.Hermitian(block, :U)`; the lower triangle and imaginary parts of the
+diagonal are ignored. Hermiticity is asserted, not checked or obtained by averaging with
+the adjoint. Cholesky checks positive definiteness and throws `PosDefException` if it fails;
+there is no automatic fallback or regularization. Positive semidefiniteness alone is not
+sufficient. Diagonal tensors retain their elementwise implementation.
+With both keywords `false` (the default), the existing general solve is used, including
+rectangular least-squares problems. The inputs are not mutated.
+When only the action of an inverse is needed, prefer division to explicitly forming the inverse.
+
 `AbstractTensorMap` instances behave themselves as vectors (i.e. they are `𝕜`-linear) and so they can be multiplied by scalars and, if they live in the same space, i.e. have the same domain and codomain, they can be added to each other.
 There is also a `zero(t)`, the additive identity, which produces a zero tensor with the same domain and codomain as `t`.
 In addition, `TensorMap` supports basic Julia methods such as `fill!` and `copy!`, as well as `copy(t)` to create a copy with independent data.
